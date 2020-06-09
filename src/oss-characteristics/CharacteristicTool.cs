@@ -185,7 +185,7 @@ namespace Microsoft.CST.OpenSource
         /// <param name="outputBuilder"></param>
         /// <param name="purl"></param>
         /// <param name="results"></param>
-        void AppendOutput(OutputBuilder outputBuilder, PackageURL purl, Dictionary<string, AnalyzeResult?> analysisResults)
+        public void AppendOutput(OutputBuilder outputBuilder, PackageURL purl, Dictionary<string, AnalyzeResult?> analysisResults)
         {
             if (outputBuilder.isTextFormat())
             {
@@ -212,9 +212,10 @@ namespace Microsoft.CST.OpenSource
                 {
                     var metadata = analysisResult?[key]?.Metadata;
 
-                    stringOutput.AppendFormat("Programming Language: {0}\n", string.Join(", ", metadata.Languages.Keys));
+                    stringOutput.AppendFormat("Programming Language: {0}\n", string.Join(", ", metadata?.Languages?.Keys ?? Array.Empty<string>()));
                     stringOutput.AppendLine("Unique Tags: ");
-                    foreach (var tag in metadata.UniqueTags)
+                    foreach (var tag in metadata?.UniqueTags ?? 
+                        new System.Collections.Concurrent.ConcurrentDictionary<string, byte>())
                     {
                         stringOutput.AppendFormat($" * {tag}\n");
                     }

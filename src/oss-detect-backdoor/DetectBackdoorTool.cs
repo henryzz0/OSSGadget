@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Microsoft.ApplicationInspector.Commands;
 using Microsoft.CST.OpenSource.Shared;
 
 namespace Microsoft.CST.OpenSource
@@ -26,18 +27,15 @@ namespace Microsoft.CST.OpenSource
         private const string RULE_DIRECTORY = @"Resources\BackdoorRules";
 
         /// <summary>
-        /// Logger for this class
-        /// </summary>
-        private static NLog.ILogger Logger { get; set; } = NLog.LogManager.GetCurrentClassLogger();
-
-        /// <summary>
         /// Command line options
         /// </summary>
         private readonly Dictionary<string, object?> Options = new Dictionary<string, object?>()
         {
             { "target", new List<string>() },
             { "download-directory", null },
-            { "use-cache", false }
+            { "use-cache", false },
+            { "format", "text" },
+            { "output-file", null }
         };
 
         /// <summary>
@@ -49,6 +47,30 @@ namespace Microsoft.CST.OpenSource
             var detectBackdoorTool = new DetectBackdoorTool();
             Logger?.Debug($"Microsoft OSS Gadget - {TOOL_NAME} {VERSION}");
             detectBackdoorTool.ParseOptions(args);
+
+            // output to console or file?
+            bool redirectConsole = !string.IsNullOrEmpty((string?)detectBackdoorTool.Options["output-file"]);
+            if (redirectConsole && detectBackdoorTool.Options["output-file"] is string outputLoc)
+            {
+                if (!ConsoleHelper.RedirectConsole(outputLoc))
+                {
+                    Logger?.Error("Could not switch output from console to file");
+                    // continue with current output
+                }
+            }
+
+            // select output format
+            OutputBuilder outputBuilder;
+            try
+            {
+                outputBuilder = new OutputBuilder(((string?)detectBackdoorTool.Options["format"] ??
+                    OutputBuilder.OutputFormat.text.ToString()));
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                Logger?.Error("Invalid output format");
+                return;
+            }
 
             if (detectBackdoorTool.Options["target"] is IList<string> targetList && targetList.Count > 0)
             {
@@ -64,15 +86,17 @@ namespace Microsoft.CST.OpenSource
                     try
                     {
                         var purl = new PackageURL(target);
-                        characteristicTool.AnalyzePackage(purl, 
+                        var analysisResults = characteristicTool.AnalyzePackage(purl,
                             (string?)detectBackdoorTool.Options["download-directory"], 
-                            (bool?)detectBackdoorTool.Options["use-cache"] == true).Wait();
+                            (bool?)detectBackdoorTool.Options["use-cache"] == true).Result;
+                        characteristicTool.AppendOutput(outputBuilder, purl, analysisResults);
                     }
                     catch (Exception ex)
                     {
                         Logger?.Warn(ex, "Error processing {0}: {1}", target, ex.Message);
                     }
                 }
+                outputBuilder.PrintOutput();
             }
             else
             {
@@ -122,6 +146,14 @@ namespace Microsoft.CST.OpenSource
                         Options["use-cache"] = true;
                         break;
 
+                    case "--format":
+                        Options["format"] = args[++i];
+                        break;
+
+                    case "--output-file":
+                        Options["output-file"] = args[++i];
+                        break;
+
                     default:
                         if (Options["target"] is IList<string> targetList)
                         {
@@ -150,6 +182,8 @@ positional arguments:
 optional arguments:
   --download-directory          the directory to download the package to
   --use-cache                   do not download the package if it is already present in the destination directory
+  --format                      selct the output format (text|sarifv1|sarifv2). (default is text)
+  --output-file                 send the command output to a file instead of stdout
   --help                        show this help message and exit
   --version                     show version of this tool
 ");
