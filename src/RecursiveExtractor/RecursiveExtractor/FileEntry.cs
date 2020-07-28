@@ -80,7 +80,7 @@ namespace Microsoft.CST.OpenSource.RecursiveExtractor
                 {
                     try
                     {
-                        Task.Run(() => inputStream.CopyToAsync(Content).ConfigureAwait(false));
+                        inputStream.CopyToAsync(Content).RunSynchronously();
                     }
                     catch(Exception f)
                     {
